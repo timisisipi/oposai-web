@@ -48,13 +48,18 @@ export default function QuickTestPro() {
 
   // Filtro por tema desde la URL (?topic_id=...&topic=...)
   const searchParams = useSearchParams();
-  const initialTopicId = searchParams?.get("topic_id");
+
+  const rawTopicId = searchParams?.get("topic_id");
+  const parsedTopicId =
+    rawTopicId && !Number.isNaN(Number(rawTopicId)) && Number(rawTopicId) > 0
+      ? Number(rawTopicId)
+      : null;
+
   const initialTopicName = searchParams?.get("topic") || "";
 
-  const [filterTopicId, setFilterTopicId] = useState<number | null>(
-    initialTopicId ? Number(initialTopicId) : null
-  );
+  const [filterTopicId, setFilterTopicId] = useState<number | null>(parsedTopicId);
   const [filterTopicName, setFilterTopicName] = useState<string>(initialTopicName);
+
 
   // Sesión
   React.useEffect(() => {

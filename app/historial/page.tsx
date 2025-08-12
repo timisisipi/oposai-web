@@ -102,11 +102,14 @@ export default function Historial() {
                   <div className="text-xs opacity-70">{t.correct}/{t.total} · {t.avg}%</div>
                 </div>
                 <a
-                  href={`/quick-test?topic_id=${t.topic_id ?? ''}&topic=${encodeURIComponent(t.topic)}`}
+                  href={t.topic_id
+                    ? `/quick-test?topic_id=${t.topic_id}&topic=${encodeURIComponent(t.topic)}`
+                    : `/quick-test`}
                   className="text-sm rounded-lg border px-3 py-1"
                 >
                   Practicar este tema
                 </a>
+
               </div>
             ))}
           </div>
