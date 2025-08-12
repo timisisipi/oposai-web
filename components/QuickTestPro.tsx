@@ -225,26 +225,31 @@ React.useEffect(() => {
     <div className="mx-auto max-w-3xl p-4 sm:p-6">
       {/* Header */}
       <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-semibold">Test rápido — Auxiliar Administrativo</h1>
-          <p className="text-xs sm:text-sm opacity-70">
-            Tests aleatorios, respuestas inmediatas y desglose por tema.
-          </p>
-        </div>
-        
-        {userEmail ? (
-          <a href="/logout" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Salir</a>
-        ) : (
-          <a href="/login" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Entrar</a>
-        )}
+      <div>
+    <h1 className="text-xl sm:text-2xl font-semibold">Test rápido — Auxiliar Administrativo</h1>
+    <p className="text-xs sm:text-sm opacity-70">Tests aleatorios, respuestas inmediatas y desglose por tema.</p>
+    </div>
 
-        <button onClick={() => setPhase("idle")} className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">
-          Reiniciar
-        </button>
-      </div>
+    <div className="flex items-center gap-2">
+      <a href="/historial" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">
+      Historial
+      </a>
 
-      
+    {userEmail ? (
+      <a href="/logout" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Salir</a>
+    ) : (
+      <a href="/login" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Entrar</a>
+    )}
 
+    <button
+      onClick={() => setPhase("idle")}
+      className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm"
+    >
+      Reiniciar
+    </button>
+  </div>
+</div>
+  
 
       {/* Error */}
       <AnimatePresence>
