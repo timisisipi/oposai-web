@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -45,6 +46,16 @@ export default function QuickTestPro() {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
+  const searchParams = useSearchParams();
+  const initialTopicId = searchParams?.get("topic_id");
+  const initialTopicName = searchParams?.get("topic") || "";
+
+  const [filterTopicId, setFilterTopicId] = useState<number | null>(
+    initialTopicId ? Number(initialTopicId) : null
+      );
+  const [filterTopicName, setFilterTopicName] = useState<string>(initialTopicName);
+
+
 React.useEffect(() => {
   supabase.auth.getSession().then(({ data }) => {
     setUserEmail(data.session?.user?.email ?? null);
@@ -82,10 +93,11 @@ React.useEffect(() => {
 }
 
       const { data: qs, error: qErr } = await supabase.rpc("get_random_questions", {
-        p_topic_id: null,
+        p_topic_id: filterTopicId,     // ← usa el filtro si existe
         p_subject_id: null,
         p_limit: count,
       });
+
       if (qErr) throw qErr;
       setQuestions(qs || []);
 
@@ -247,6 +259,20 @@ React.useEffect(() => {
     >
       Reiniciar
     </button>
+
+    {filterTopicId !== null && (
+      <div className="text-xs sm:text-sm">
+        Practicando tema: <span className="font-medium">{filterTopicName || `ID ${filterTopicId}`}</span>{" "}
+        <button
+          onClick={() => { setFilterTopicId(null); setFilterTopicName(""); }}
+          className="underline"
+        >
+          quitar
+        </button>
+      </div>
+    )}
+
+
   </div>
 </div>
   
