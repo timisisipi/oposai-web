@@ -1,84 +1,90 @@
+// app/api/tutor/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-export const runtime = "nodejs";
+const { NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE, OPENAI_API_KEY } = process.env;
+if (!NEXT_PUBLIC_SUPABASE_URL) throw new Error("ENV missing: NEXT_PUBLIC_SUPABASE_URL");
+if (!SUPABASE_SERVICE_ROLE) throw new Error("ENV missing: SUPABASE_SERVICE_ROLE");
+if (!OPENAI_API_KEY) throw new Error("ENV missing: OPENAI_API_KEY");
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,           // OK leerla en servidor
-  process.env.SUPABASE_SERVICE_ROLE!,             // SOLO servidor
-  { auth: { persistSession: false } }
-);
+const supabaseAdmin = createClient(NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE);
 
 export async function POST(req: Request) {
   try {
     const { attempt_id, question_id } = await req.json();
-
     if (!attempt_id || !question_id) {
-      return NextResponse.json({ error: "Faltan attempt_id o question_id" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "missing attempt_id or question_id" }, { status: 400 });
     }
 
-    // 1) Saca pregunta completa (incluye correct_option) y respuesta del usuario
+    // 1) Lee la pregunta (una sola fila)
     const { data: q, error: qErr } = await supabaseAdmin
       .from("questions")
-      .select("id, stem, correct_option, explanation, source, topic_id, topics(name), options:options(label,text)")
+      .select("id, stem, correct_option, topic_id")
       .eq("id", question_id)
-      .single();
+      .maybeSingle();
     if (qErr) throw qErr;
+    if (!q) return NextResponse.json({ ok: false, error: "question not found" }, { status: 404 });
 
-    const { data: ans, error: aErr } = await supabaseAdmin
-      .from("attempt_answers")
-      .select("selected_option")
-      .eq("attempt_id", attempt_id)
+    // 2) Lee opciones (lista)
+    const { data: opts, error: oErr } = await supabaseAdmin
+      .from("options")
+      .select("label, text")
       .eq("question_id", question_id)
-      .single();
-    if (aErr) throw aErr;
+      .order("label");
+    if (oErr) throw oErr;
 
-    const selected = ans?.selected_option as string | null;
-    const correct = q.correct_option as string;
+    // (Opcional) etiqueta del tema
+    let topicName = "";
+    if (q.topic_id) {
+      const { data: t } = await supabaseAdmin.from("topics").select("name").eq("id", q.topic_id).maybeSingle();
+      topicName = t?.name ?? "";
+    }
 
-    // 2) Construye el prompt (formato en 3 capas)
-    const system = `Eres un tutor de oposiciones de Auxiliar Administrativo.
-Responde SIEMPRE en 3 capas: 
-**Idea clave** (1–2 frases) 
-**Paso a paso** (numerado) 
-**Referencia** (norma/tema) 
-**Próximo paso (60 s)** (mini tarea).
-Lenguaje claro. No inventes artículos.`;
-    const user = `
-Pregunta: ${q.stem}
-Opciones: ${q.options.map((o: any) => `${o.label}) ${o.text}`).join(" | ")}
-Respuesta del alumno: ${selected ?? "(no contestó)"}
-Respuesta correcta: ${correct}
-Explicación base (si existe): ${q.explanation ?? "—"}
-Fuente/tema: ${q.source ?? "—"}
-Da feedback breve, corrige si está mal y explica por qué las incorrectas no lo son.`;
+    // 3) Prompt para el LLM
+    const optionsText = (opts || [])
+      .map((o: any) => `${o.label}. ${o.text}`)
+      .join("\n");
 
-    // 3) Llama a OpenAI
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    const prompt = `
+Eres un tutor de oposiciones. Explica de forma breve y clara la respuesta correcta.
+- Pregunta: ${q.stem}
+- Opciones:
+${optionsText}
+- Respuesta correcta: ${q.correct_option}
+- Tema: ${topicName}
+Devuelve 4-6 líneas como máximo, en español, sin repetir la pregunta.
+`;
+
+    // 4) Llamada a OpenAI (responses API)
+    const r = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-        temperature: 0.2,
+        model: "gpt-4.1-mini",
+        input: prompt,
       }),
     });
 
+    const jr = await r.json();
     if (!r.ok) {
-      const txt = await r.text();
-      throw new Error(`OpenAI error: ${txt}`);
+      const msg = jr?.error?.message || "openai error";
+      return NextResponse.json({ ok: false, error: msg }, { status: 500 });
     }
-    const data = await r.json();
-    const text = data.choices?.[0]?.message?.content ?? "Sin respuesta";
+
+    const text = typeof jr.output_text === "string" ? jr.output_text.trim() : "Sin respuesta";
+
+    // 5) Cachear (no obligatorio, pero útil)
+    await supabaseAdmin
+      .from("tutor_explanations")
+      .upsert({ attempt_id, question_id, user_id: null, text }, { onConflict: "attempt_id,question_id" });
 
     return NextResponse.json({ ok: true, text });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || "Error" }, { status: 500 });
+    const msg = e?.message || "server error";
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
+
