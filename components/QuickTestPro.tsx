@@ -232,16 +232,18 @@ React.useEffect(() => {
           </p>
         </div>
         
+        {userEmail ? (
+          <a href="/logout" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Salir</a>
+        ) : (
+          <a href="/login" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Entrar</a>
+        )}
+
         <button onClick={() => setPhase("idle")} className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">
           Reiniciar
         </button>
       </div>
 
-      {userEmail ? (
-          <a href="/logout" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Salir</a>
-        ) : (
-          <a href="/login" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Entrar</a>
-        )}
+      
 
 
       {/* Error */}
