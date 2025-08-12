@@ -15,9 +15,10 @@ export default function LoginPage() {
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
+    const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? (typeof window !== "undefined" ? window.location.origin : "");
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${location.origin}/quick-test` },
+      options: { emailRedirectTo: `${SITE_URL}/quick-test` },
     });
     if (error) setErr(error.message);
     else setSent(true);
