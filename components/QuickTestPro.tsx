@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -41,6 +42,19 @@ export default function QuickTestPro() {
   // Tutor IA
   const [tutor, setTutor] = useState<Record<number, string>>({});
   const [loadingTutor, setLoadingTutor] = useState<Record<number, boolean>>({});
+  const router = useRouter();
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+React.useEffect(() => {
+  supabase.auth.getSession().then(({ data }) => {
+    setUserEmail(data.session?.user?.email ?? null);
+  });
+  const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+    setUserEmail(session?.user?.email ?? null);
+  });
+  return () => { sub.subscription.unsubscribe(); };
+}, []);
+
 
   const answered = useMemo(() => Object.keys(answers).length, [answers]);
   const progress = useMemo(
@@ -59,6 +73,13 @@ export default function QuickTestPro() {
       setTutor({});
       setLoadingTutor({});
       setMarked({});
+
+      const { data: s } = await supabase.auth.getSession();
+      if (!s.session) {
+        alert("Inicia sesión para empezar el test.");
+        router.push("/login");
+        return;
+}
 
       const { data: qs, error: qErr } = await supabase.rpc("get_random_questions", {
         p_topic_id: null,
@@ -210,10 +231,18 @@ export default function QuickTestPro() {
             Tests aleatorios, respuestas inmediatas y desglose por tema.
           </p>
         </div>
+        
         <button onClick={() => setPhase("idle")} className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">
           Reiniciar
         </button>
       </div>
+
+      {userEmail ? (
+          <a href="/logout" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Salir</a>
+        ) : (
+          <a href="/login" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Entrar</a>
+        )}
+
 
       {/* Error */}
       <AnimatePresence>
