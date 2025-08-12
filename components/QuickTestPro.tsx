@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -43,29 +42,32 @@ export default function QuickTestPro() {
   // Tutor IA
   const [tutor, setTutor] = useState<Record<number, string>>({});
   const [loadingTutor, setLoadingTutor] = useState<Record<number, boolean>>({});
+
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
+  // Filtro por tema desde la URL (?topic_id=...&topic=...)
   const searchParams = useSearchParams();
   const initialTopicId = searchParams?.get("topic_id");
   const initialTopicName = searchParams?.get("topic") || "";
 
   const [filterTopicId, setFilterTopicId] = useState<number | null>(
     initialTopicId ? Number(initialTopicId) : null
-      );
+  );
   const [filterTopicName, setFilterTopicName] = useState<string>(initialTopicName);
 
-
-React.useEffect(() => {
-  supabase.auth.getSession().then(({ data }) => {
-    setUserEmail(data.session?.user?.email ?? null);
-  });
-  const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-    setUserEmail(session?.user?.email ?? null);
-  });
-  return () => { sub.subscription.unsubscribe(); };
-}, []);
-
+  // Sesión
+  React.useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setUserEmail(data.session?.user?.email ?? null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUserEmail(session?.user?.email ?? null);
+    });
+    return () => {
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
   const answered = useMemo(() => Object.keys(answers).length, [answers]);
   const progress = useMemo(
@@ -90,19 +92,21 @@ React.useEffect(() => {
         alert("Inicia sesión para empezar el test.");
         router.push("/login");
         return;
-}
+      }
 
+      // Preguntas (filtra por tema si viene en la URL)
       const { data: qs, error: qErr } = await supabase.rpc("get_random_questions", {
-        p_topic_id: filterTopicId,     // ← usa el filtro si existe
+        p_topic_id: filterTopicId,
         p_subject_id: null,
         p_limit: count,
       });
-
       if (qErr) throw qErr;
       setQuestions(qs || []);
 
+      // Intento (pasamos p_exam_id: null para evitar choque de firmas)
       const { data: attId, error: aErr } = await supabase.rpc("start_attempt", {
         p_mode: trainingMode ? "entrenamiento" : "test_rapido",
+        p_exam_id: null,
       });
       if (aErr) throw aErr;
 
@@ -120,10 +124,12 @@ React.useEffect(() => {
   async function choose(qid: number, label: Option["label"]) {
     if (!attemptId) return;
     setAnswers((prev) => ({ ...prev, [qid]: label }));
+
+    // Forzamos text para evitar ambigüedad con submit_answer(character)
     const { error: sErr } = await supabase.rpc("submit_answer", {
       p_attempt_id: attemptId,
       p_question_id: qid,
-      p_selected: label,
+      p_selected: String(label),
     });
     if (sErr) setError(sErr.message);
 
@@ -237,45 +243,43 @@ React.useEffect(() => {
     <div className="mx-auto max-w-3xl p-4 sm:p-6">
       {/* Header */}
       <div className="mb-5 flex items-center justify-between">
-      <div>
-    <h1 className="text-xl sm:text-2xl font-semibold">Test rápido — Auxiliar Administrativo</h1>
-    <p className="text-xs sm:text-sm opacity-70">Tests aleatorios, respuestas inmediatas y desglose por tema.</p>
-    </div>
+        <div>
+          <h1 className="text-xl sm:text-2xl font-semibold">Test rápido — Auxiliar Administrativo</h1>
+          <p className="text-xs sm:text-sm opacity-70">Tests aleatorios, respuestas inmediatas y desglose por tema.</p>
+        </div>
 
-    <div className="flex items-center gap-2">
-      <a href="/historial" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">
-      Historial
-      </a>
+        <div className="flex items-center gap-2">
+          <a href="/historial" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">
+            Historial
+          </a>
 
-    {userEmail ? (
-      <a href="/logout" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Salir</a>
-    ) : (
-      <a href="/login" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Entrar</a>
-    )}
+          {userEmail ? (
+            <a href="/logout" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Salir</a>
+          ) : (
+            <a href="/login" className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm">Entrar</a>
+          )}
 
-    <button
-      onClick={() => setPhase("idle")}
-      className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm"
-    >
-      Reiniciar
-    </button>
-
-    {filterTopicId !== null && (
-      <div className="text-xs sm:text-sm">
-        Practicando tema: <span className="font-medium">{filterTopicName || `ID ${filterTopicId}`}</span>{" "}
-        <button
-          onClick={() => { setFilterTopicId(null); setFilterTopicName(""); }}
-          className="underline"
-        >
-          quitar
-        </button>
+          <button
+            onClick={() => setPhase("idle")}
+            className="rounded-xl border px-3 py-2 text-xs sm:text-sm shadow-sm"
+          >
+            Reiniciar
+          </button>
+        </div>
       </div>
-    )}
 
-
-  </div>
-</div>
-  
+      {/* Chip del filtro por tema (si viene de /historial → “Practicar este tema”) */}
+      {filterTopicId !== null && (
+        <div className="mb-3 text-xs sm:text-sm">
+          Practicando tema: <span className="font-medium">{filterTopicName || `ID ${filterTopicId}`}</span>{" "}
+          <button
+            onClick={() => { setFilterTopicId(null); setFilterTopicName(""); }}
+            className="underline"
+          >
+            quitar
+          </button>
+        </div>
+      )}
 
       {/* Error */}
       <AnimatePresence>
@@ -447,7 +451,11 @@ React.useEffect(() => {
 
       {/* Finished */}
       {phase === "finished" && result && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border p-4 sm:p-5 shadow-sm">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border p-4 sm:p-5 shadow-sm"
+        >
           <div className="text-base sm:text-lg font-semibold">Resultado</div>
           <div className="mt-1 text-sm sm:text-base">
             Nota: <span className="font-medium">{result.score}%</span> · Correctas: {result.correct}/{result.total}
@@ -458,7 +466,10 @@ React.useEffect(() => {
               <div className="mb-2 text-sm sm:text-base font-semibold">Desglose por tema</div>
               <div className="grid gap-2">
                 {result.by_topic.map((t: any, i: number) => (
-                  <div key={i} className="flex items-center justify-between rounded-xl border px-3 py-2 text-sm sm:text-base">
+                  <div
+                    key={i}
+                    className="flex items-center justify-between rounded-xl border px-3 py-2 text-sm sm:text-base"
+                  >
                     <div>{t.topic || "Tema"}</div>
                     <div className="opacity-80">{t.correct}/{t.total}</div>
                   </div>
